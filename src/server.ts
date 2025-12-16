@@ -5,6 +5,7 @@ import { connectDB } from './config/database';
 import authRoutes from './routes/authRoutes';
 import stampRoutes from './routes/stampRoutes';
 
+
 dotenv.config();
 
 const app = express();
@@ -23,7 +24,7 @@ app.use('/api/stamps', stampRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Server is running' });
+  res.status(200).json({ status: 'OK*** Perfect ', message: 'STIZI Server is running' });
 });
 
 const PORT = process.env.PORT || 5000;

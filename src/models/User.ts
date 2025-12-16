@@ -50,14 +50,14 @@ const userSchema = new Schema<IUser>({
   },
 });
 
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    next();
-  }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password as string, salt);
+// FIX: next argument ko remove kar dein
+userSchema.pre('save', async function() { 
+  if (!this.isModified('password')) {
+    return; // <--- next() ki jagah simple 'return' use karein
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password as string, salt);
 });
-
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
   return await bcrypt.compare(candidatePassword, this.password);
 };

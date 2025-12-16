@@ -1,10 +1,14 @@
 import express from 'express';
-import { createStamp, getNearbyStamps, collectStamp, getMyStamps } from '../controllers/stampController';
+import {
+  createStamp,
+  getNearbyStamps,
+  collectStamp,
+  getMyStamps,
+} from '../controllers/stampController';
 import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
-export const API_URL = 'http://localhost:5000/api';
 router.post('/', protect, createStamp);
 router.get('/nearby', protect, getNearbyStamps);
 router.post('/collect', protect, collectStamp);
