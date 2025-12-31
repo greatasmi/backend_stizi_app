@@ -94,7 +94,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send("Stizi Dynamic API is Live............! "));
+app.get('/', (req, res) => res.send("Stizi Dynamic API is Live............! 🚀  🚀  🚀  🚀  🚀"));
 
 // --- FIXED SECTION: SERVER LISTENER ---
 // This part ensures the app stays running during 'npm run dev'
