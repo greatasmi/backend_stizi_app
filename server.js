@@ -6,69 +6,94 @@ const cors = require('cors');
 const User = require('./models/User');
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// 1. Improved MongoDB Connection for Vercel
-// This prevents multiple connections in a serverless environment
-let isConnected = false;
+// 1. Dynamic Database Connection
 const connectDB = async () => {
-    if (isConnected) return;
+    if (mongoose.connection.readyState >= 1) return;
     try {
         await mongoose.connect(process.env.MONGODB_URI);
-        isConnected = true;
-        console.log("✅ MongoDB Connected Successfully");
+        console.log("✅ MongoDB Connected");
     } catch (err) {
-        console.error("❌ MongoDB Connection Error:", err);
+        console.error("❌ Connection Error:", err);
     }
 };
 
-// 2. Base Route to check if server is live
-app.get('/', (req, res) => {
-    res.send("Stizi Backend is Running Successfully!");
-});
+// 2. Helper Functions for Dynamic Token Generation
+const generateAccessToken = (user) => {
+    return jwt.sign(
+        { userId: user._id, phone: user.phone },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' } // Short life for security
+    );
+};
 
-// 3. Auth Route
+const generateRefreshToken = (user) => {
+    return jwt.sign(
+        { userId: user._id },
+        process.env.REFRESH_SECRET, // Add this to Vercel Variables
+        { expiresIn: '7d' } // Long life for persistence
+    );
+};
+
+// 3. Dynamic Auth Route
 app.post('/api/auth/verify-otp', async (req, res) => {
-    await connectDB(); // Ensure DB is connected before query
+    await connectDB();
     const { phone, otp } = req.body;
 
-    if (otp !== '123456') {
-        return res.status(400).json({ message: "Invalid OTP code" });
-    }
+    if (otp !== '123456') return res.status(400).json({ message: "Invalid OTP" });
 
     try {
         let user = await User.findOne({ phone });
-
         if (!user) {
             user = new User({ phone });
-            await user.save();
         }
 
-        const token = jwt.sign(
-            { userId: user._id, phone: user.phone },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        // Save refresh token to user document
+        user.refreshToken = refreshToken;
+        await user.save();
 
         res.status(200).json({
             message: "Login Successful",
-            token,
+            accessToken,
+            refreshToken,
             user
         });
-
     } catch (error) {
-        console.error("Error details:", error);
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
+        res.status(500).json({ message: "Server Error" });
     }
 });
 
-// For local development
-const PORT = process.env.PORT || 5000;
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
-}
+// 4. Token Refresh Route
+app.post('/api/auth/refresh', async (req, res) => {
+    await connectDB();
+    const { token } = req.body;
+    if (!token) return res.status(401).json({ message: "No token provided" });
+
+    try {
+        const payload = jwt.verify(token, process.env.REFRESH_SECRET);
+        const user = await User.findById(payload.userId);
+
+        if (!user || user.refreshToken !== token) {
+            return res.status(403).json({ message: "Invalid refresh token" });
+        }
+
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+
+        user.refreshToken = newRefreshToken;
+        await user.save();
+
+        res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+    } catch (err) {
+        res.status(403).json({ message: "Token expired or invalid" });
+    }
+});
+
+app.get('/', (req, res) => res.send("Stizi Dynamic API is Live"));
 
 module.exports = app;
