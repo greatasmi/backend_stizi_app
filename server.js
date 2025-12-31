@@ -6,21 +6,24 @@ const cors = require('cors');
 const User = require('./models/User');
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// 1. Dynamic Database Connection
+// 1. Database Connection (Improved for Serverless)
 const connectDB = async () => {
     if (mongoose.connection.readyState >= 1) return;
     try {
+        // Ensure MONGODB_URI is in your Vercel/Local .env
         await mongoose.connect(process.env.MONGODB_URI);
         console.log("✅ MongoDB Connected");
     } catch (err) {
-        console.error("❌ Connection Error:", err);
+        console.error("❌ MongoDB Connection Error:", err.message);
     }
 };
 
-// 2. Helper Functions for Dynamic Token Generation
+// 2. Helper Functions
 const generateAccessToken = (user) => {
     return jwt.sign(
         { userId: user._id, phone: user.phone },
@@ -32,19 +35,26 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = (user) => {
     return jwt.sign(
         { userId: user._id },
-        process.env.REFRESH_SECRET,
+        process.env.REFRESH_SECRET, // Use the new secret you generated
         { expiresIn: '7d' } 
     );
 };
 
-// 3. Dynamic Auth Route
+// 3. Auth Route
+// Note: Ensure Postman hits exactly: /api/auth/verify-otp
 app.post('/api/auth/verify-otp', async (req, res) => {
-    await connectDB();
-    const { phone, otp } = req.body;
-
-    if (otp !== '123456') return res.status(400).json({ message: "Invalid OTP" });
-
     try {
+        await connectDB();
+        const { phone, otp } = req.body;
+
+        if (!phone || !otp) {
+            return res.status(400).json({ message: "Phone and OTP are required" });
+        }
+
+        if (otp !== '123456') {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
         let user = await User.findOne({ phone });
         if (!user) {
             user = new User({ phone });
@@ -53,6 +63,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
+        // Save refresh token to DB
         user.refreshToken = refreshToken;
         await user.save();
 
@@ -63,18 +74,18 @@ app.post('/api/auth/verify-otp', async (req, res) => {
             user
         });
     } catch (error) {
-        console.error("Auth Error:", error);
-        res.status(500).json({ message: "Server Error" });
+        console.error("Auth Error:", error.message);
+        res.status(500).json({ message: "Server Error", error: error.message });
     }
 });
 
 // 4. Token Refresh Route
 app.post('/api/auth/refresh', async (req, res) => {
-    await connectDB();
-    const { token } = req.body;
-    if (!token) return res.status(401).json({ message: "No token provided" });
-
     try {
+        await connectDB();
+        const { token } = req.body;
+        if (!token) return res.status(401).json({ message: "No token provided" });
+
         const payload = jwt.verify(token, process.env.REFRESH_SECRET);
         const user = await User.findById(payload.userId);
 
@@ -94,18 +105,15 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send("Stizi Dynamic API is Live............! 🚀  🚀  🚀  🚀  🚀"));
+// Root Route
+app.get('/', (req, res) => res.send("Stizi Dynamic API is Live! 🚀"));
 
-// --- FIXED SECTION: SERVER LISTENER ---
-// This part ensures the app stays running during 'npm run dev'
+// --- LOCAL LISTENER ---
 const PORT = process.env.PORT || 5000;
-
-// Only start the listener if we are NOT on Vercel's production environment
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => {
         console.log(`🚀 Server running locally at http://localhost:${PORT}`);
-        // Log to confirm DB connection attempt on startup
-        connectDB();
+        connectDB(); // Pre-connect locally
     });
 }
 
