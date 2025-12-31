@@ -25,15 +25,15 @@ const generateAccessToken = (user) => {
     return jwt.sign(
         { userId: user._id, phone: user.phone },
         process.env.JWT_SECRET,
-        { expiresIn: '15m' } // Short life for security
+        { expiresIn: '15m' } 
     );
 };
 
 const generateRefreshToken = (user) => {
     return jwt.sign(
         { userId: user._id },
-        process.env.REFRESH_SECRET, // Add this to Vercel Variables
-        { expiresIn: '7d' } // Long life for persistence
+        process.env.REFRESH_SECRET,
+        { expiresIn: '7d' } 
     );
 };
 
@@ -53,7 +53,6 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        // Save refresh token to user document
         user.refreshToken = refreshToken;
         await user.save();
 
@@ -64,6 +63,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
             user
         });
     } catch (error) {
+        console.error("Auth Error:", error);
         res.status(500).json({ message: "Server Error" });
     }
 });
@@ -94,6 +94,19 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send("Stizi Dynamic API is Live"));
+app.get('/', (req, res) => res.send("Stizi Dynamic API is Live............! "));
+
+// --- FIXED SECTION: SERVER LISTENER ---
+// This part ensures the app stays running during 'npm run dev'
+const PORT = process.env.PORT || 5000;
+
+// Only start the listener if we are NOT on Vercel's production environment
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running locally at http://localhost:${PORT}`);
+        // Log to confirm DB connection attempt on startup
+        connectDB();
+    });
+}
 
 module.exports = app;
